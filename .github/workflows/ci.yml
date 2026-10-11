@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-unit-test:
+    name: Build and unit test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      # HOTKV_TEST_URL is intentionally unset here: integration tests detect
+      # that and report themselves as skipped (with a clear reason) instead
+      # of failing, so this single command exercises every unit test and
+      # proves the integration suite fails safe without a server.
+      - name: Test (unit tests; integration tests skip without a server)
+        run: dotnet test --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Pack
+        run: dotnet pack src/HotKV/HotKV.csproj --configuration Release --no-build --output ./artifacts
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-package
+          path: ./artifacts/*.nupkg
+
+  integration-test:
+    name: Integration tests (optional, needs a live HotKV server)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Runs only when triggered manually and a HOTKV_TEST_URL secret pointing
+    # at a reachable HotKV server has been configured for this repository;
+    # see "Running integration tests locally" below for the equivalent local
+    # setup. This job is not required for CI to pass.
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Test against a live server
+        env:
+          HOTKV_TEST_URL: ${{ secrets.HOTKV_TEST_URL }}
+        run: |
+          if [ -z "$HOTKV_TEST_URL" ]; then
+            echo "HOTKV_TEST_URL secret is not set; skipping this job's actual run."
+            exit 0
+          fi
+          dotnet test --configuration Release --logger "console;verbosity=normal"
+
+# Running integration tests locally:
+#   1. Start (or point at) a HotKV server, e.g.
+#        HOTKV_TEST_URL=hotkv://127.0.0.1:6399
+#   2. export HOTKV_TEST_URL=hotkv://127.0.0.1:6399
+#   3. dotnet test
+# Commands gated behind an enterprise/AI license feature the connected
+# server does not have loaded are skipped automatically (NotLicensedException),
+# not failed.

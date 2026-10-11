@@ -1,0 +1,108 @@
+name: Publish
+
+# Pushing a tag such as v1.0.0 builds, tests and packs the SDK and publishes it
+# to nuget.org with Trusted Publishing (no API key). A manual run (workflow_dispatch) defaults to a dry run that
+# builds and uploads the packages as a workflow artifact but publishes nothing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build, test and pack, but do not push to nuget.org"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build, test, pack and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # nuget.org Trusted Publishing
+    env:
+      CSPROJ: src/HotKV/HotKV.csproj
+      # Tag pushes publish for real; manual runs publish only when dry_run is explicitly set to false.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Read the project version
+        id: version
+        shell: bash
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' "$CSPROJ" | head -n 1)
+          if [ -z "$version" ]; then
+            echo "::error::could not read <Version> from $CSPROJ"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Project version: $version"
+
+      - name: Verify the tag matches the project version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          expected="v${{ steps.version.outputs.version }}"
+          if [ "$tag" != "$expected" ]; then
+            echo "::error::tag $tag does not match the project version (expected $expected)"
+            exit 1
+          fi
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      # HOTKV_TEST_URL is intentionally unset: the integration tests report
+      # themselves as skipped without a server, so this runs the unit tests.
+      - name: Unit tests
+        run: dotnet test --configuration Release --no-build --logger "console;verbosity=normal"
+
+      - name: Pack
+        run: dotnet pack "$CSPROJ" --configuration Release --no-build --output ./artifacts
+
+      - name: List the packages
+        run: ls -l ./artifacts
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget-packages
+          path: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.snupkg
+
+      # Trusted Publishing: nuget.org trusts this repository and workflow, so no API key is stored.
+      # The login step exchanges the GitHub OIDC token for a short-lived key.
+      - name: Log in to nuget.org
+        id: nuget-login
+        if: env.DRY_RUN != 'true'
+        uses: NuGet/login@v1
+        with:
+          user: hotkv-ltd
+
+      - name: Publish to nuget.org
+        if: env.DRY_RUN != 'true'
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        shell: bash
+        run: |
+          for pkg in ./artifacts/*.nupkg ./artifacts/*.snupkg; do
+            dotnet nuget push "$pkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: Dry run summary
+        if: env.DRY_RUN == 'true'
+        run: echo "Dry run (packages were built and uploaded as an artifact, nothing was pushed to nuget.org)."

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <RootNamespace>HotKV</RootNamespace>
+    <AssemblyName>HotKV</AssemblyName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>HotKV.Client</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>HotKV Ltd</Authors>
+    <Company>HotKV Ltd</Company>
+    <Product>HotKV .NET Client</Product>
+    <Description>A high-performance .NET client for HotKV, a RESP2/RESP3-compatible in-memory data store with built-in AI and LLM-serving features.</Description>
+    <PackageProjectUrl>https://hotkv.com</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/hotkv-ltd/hotkv-csharp-client</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>hotkv;resp;resp3;cache;client;database;ai;llm;semantic-cache;vector</PackageTags>
+    <Copyright>Copyright (c) 2026 HotKV Ltd</Copyright>
+    <PackageReleaseNotes>Targets HotKV server 0.3.0.</PackageReleaseNotes>
+  </PropertyGroup>
+
+  <!-- Source Link, symbols and reproducible builds -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+  <!-- Normalises source paths so the same commit always produces the same binaries; only on CI, so local debugging keeps real paths. -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true' Or '$(CI)' == 'true' Or '$(TF_BUILD)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" Visible="false" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
+
+</Project>
