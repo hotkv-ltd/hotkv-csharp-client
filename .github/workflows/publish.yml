@@ -29,7 +29,7 @@ jobs:
       # Tag pushes publish for real; manual runs publish only when dry_run is explicitly set to false.
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
